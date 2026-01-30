@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"log"
 
 	amq "github.com/rabbitmq/amqp091-go"
 )
@@ -47,7 +48,8 @@ func New(cfg Config) (*Rabbitmq, error) {
 	}
 
 	q, err := ch.QueueDeclare(
-		"payroll", false,
+		"payroll",
+		false,
 		false,
 		false,
 		false,
@@ -64,5 +66,16 @@ func New(cfg Config) (*Rabbitmq, error) {
 }
 
 func (r *Rabbitmq) Enqueue(ctx context.Context, body []byte) error {
-	
+	err := r.channel.PublishWithContext(ctx, "", r.queue, false, false, amq.Publishing{
+		DeliveryMode: amq.Persistent,
+		ContentType:  "application/json",
+		Body:         body,
+	})
+
+	if err != nil {
+		log.Println("Cannot add it in queue")
+		return err
+	}
+
+	return nil
 }
