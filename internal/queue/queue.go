@@ -41,15 +41,17 @@ func (n *Nats) Enqueue(ctx context.Context, body []byte) error {
 
 func (n *Nats) Consume(ctx context.Context) error {
 
-	con := make(chan struct{}, 10)
+	con := make(chan struct{}, 10) //10 concurrent workers
 
 	sub, err := n.conn.Subscribe("Payroll-Queue", func(m *nats.Msg) {
-		con <- struct{}{}
+		con <- struct{}{} //Uses a free worker
 		go func() {
-			defer func() { <-con }()
+			defer func() { <-con }() //Releases a worker
 			handleMessage(m.Data)
 		}()
 	})
+
+	//Alternative method would be to run the worker in a go routine.
 
 	if err != nil {
 		log.Println("Error getting message")
@@ -64,6 +66,6 @@ func (n *Nats) Consume(ctx context.Context) error {
 }
 
 func (n *Nats) Close() error {
-	defer n.Close()
+	n.Close()
 	return nil
 }
