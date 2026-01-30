@@ -20,7 +20,7 @@ type Rabbitmq struct {
 type Config struct {
 	URL        string
 	Exchange   string
-	Queue      string
+	Queue      *amq.Queue
 	DLQ        string
 	RoutingKey string
 	Prefetch   int
@@ -45,9 +45,24 @@ func New(cfg Config) (*Rabbitmq, error) {
 		conn.Close()
 		return nil, err
 	}
+
+	q, err := ch.QueueDeclare(
+		"payroll", false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &Rabbitmq{
 		conn:    conn,
 		channel: ch,
-		queue:   cfg.Queue,
+		queue:   q.Name,
 	}, nil
+}
+
+func (r *Rabbitmq) Enqueue(ctx context.Context, body []byte) error {
+	
 }
