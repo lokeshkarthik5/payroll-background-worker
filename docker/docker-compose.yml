@@ -1,22 +1,11 @@
 version: '3.8'
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    restart: always
+  nats:
+    image: nats:2.10
+    container_name: payslip-nats
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      -rabbitmq_data:/var/lib/rabbitmq/
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics","-q","ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "4222:4222"
+      - "8222:8222" # monitoring
   db:
     image: postgres:15
     container_name: postgres_db
@@ -36,5 +25,4 @@ services:
       retries: 5
     
 volumes:
-    rabbitmq_data: 
     postgres_data: 

@@ -4,78 +4,66 @@ import (
 	"context"
 	"log"
 
-	amq "github.com/rabbitmq/amqp091-go"
+	"github.com/nats-io/nats.go"
 )
 
-type Message struct {
-	body     []byte
-	delivery uint64
-}
-
-type Rabbitmq struct {
-	conn    *amq.Connection
-	channel *amq.Channel
-	queue   string
-}
-
-type Config struct {
-	URL        string
-	Exchange   string
-	Queue      *amq.Queue
-	DLQ        string
-	RoutingKey string
-	Prefetch   int
+type Nats struct {
+	conn *nats.Conn
 }
 
 type Queue interface {
 	Enqueue(ctx context.Context, body []byte) error
-	Dequeue(ctx context.Context) (Message, error)
-	Ack(ctx context.Context, msg Message) error
-	Nack(ctx context.Context, msg Message, requeue bool) error
+	Consume(ctx context.Context) error
 	Close() error
 }
 
-func New(cfg Config) (*Rabbitmq, error) {
-
-	conn, err := amq.Dial(cfg.URL)
+func New(url string) (*Nats, error) {
+	nc, err := nats.Connect(url)
 	if err != nil {
-		return nil, err
-	}
-	ch, err := conn.Channel()
-	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
-	q, err := ch.QueueDeclare(
-		"payroll",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &Rabbitmq{
-		conn:    conn,
-		channel: ch,
-		queue:   q.Name,
+	return &Nats{
+		conn: nc,
 	}, nil
 }
 
-func (r *Rabbitmq) Enqueue(ctx context.Context, body []byte) error {
-	err := r.channel.PublishWithContext(ctx, "", r.queue, false, false, amq.Publishing{
-		DeliveryMode: amq.Persistent,
-		ContentType:  "application/json",
-		Body:         body,
-	})
+func (n *Nats) Enqueue(ctx context.Context, body []byte) error {
+	err := n.conn.Publish("Payroll-Queue", body)
 
 	if err != nil {
 		log.Println("Cannot add it in queue")
 		return err
 	}
 
+	return nil
+}
+
+func (n *Nats) Consume(ctx context.Context) error {
+
+	con := make(chan struct{}, 10)
+
+	sub, err := n.conn.Subscribe("Payroll-Queue", func(m *nats.Msg) {
+		con <- struct{}{}
+		go func() {
+			defer func() { <-con }()
+			handleMessage(m.Data)
+		}()
+	})
+
+	if err != nil {
+		log.Println("Error getting message")
+		return err
+	}
+
+	go func() {
+		<-ctx.Done()
+		sub.Unsubscribe()
+	}()
+	return nil
+}
+
+func (n *Nats) Close() error {
+	defer n.Close()
 	return nil
 }
